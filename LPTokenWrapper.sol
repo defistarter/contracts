@@ -24,7 +24,7 @@ contract LPTokenWrapper is ReentrancyGuard {
     IERC20 public lpToken;
 
     uint256 private _totalSupply;
-    mapping (uint256 => uint256) _historyTotalSupply;
+    mapping (uint256 => uint256) private _historyTotalSupply;
     mapping(address => uint256) private _balances;
     //Hold in seconds before withdrawal after last time staked
     uint256 public holdTime;
@@ -37,9 +37,8 @@ contract LPTokenWrapper is ReentrancyGuard {
         bool exists;
         mapping (uint256 => uint) historyBalance;
     }
-    //@debug maked public for debug purposes, remove for runtime
-    //mapping (address => UserData) private userData;
-    mapping (address => UserData) public userData;    
+
+    mapping (address => UserData) private userData;
 
     /**
      * @dev TokenWrapper constructor
