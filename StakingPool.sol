@@ -22,9 +22,12 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     enum Status {Setup, Running, Ended}
     
     //Constants
-    uint256 constant CALC_PRECISION = 1e18; 
-    address constant FEE_BENEFICIARY = address(0);
-    
+    uint256 constant public CALC_PRECISION = 1e18;
+
+    // Address where fees will be sent if fee isn't 0
+    address public fee_beneficiary;
+    // Fee in PPM (Parts Per Million), can be 0
+    uint256 public fee;
     //Status of contract
     Status public status;
     //Rewards for period
@@ -84,7 +87,9 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         uint256 _periodDays, 
         uint256 _totalPeriods,
         uint256 _gracePeriodDays,
-        uint256 _holdDays
+        uint256 _holdDays,
+        address _fee_beneficiary,
+        uint256 _fee
     )
         public
         LPTokenWrapper(_lpToken, _holdDays)
@@ -97,6 +102,8 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         periodTime = _periodDays.mul(1 days);
         totalPeriods = _totalPeriods;
         gracePeriodTime = _gracePeriodDays.mul(1 days);
+        fee_beneficiary = _fee_beneficiary;
+        fee = _fee;
     }
 
     /***************************************
@@ -168,27 +175,13 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         IERC20 _token = IERC20(_tokenAddress);
         uint256 _balance = _token.balanceOf(address(this));
         require(_balance != 0, "Not enough balance");
-        uint256 _fee = _balance.div(10);
-        _token.safeTransfer(FEE_BENEFICIARY, _fee);
+        uint256 _fee = _balance.mul(fee).div(1e6);
+        if(_fee != 0){
+            _token.safeTransfer(fee_beneficiary, _fee);
+            emit WithdrawnERC20(fee_beneficiary, _tokenAddress, _fee);
+        }
         _token.safeTransfer(msg.sender, _balance.sub(_fee));
-        emit WithdrawnERC20(FEE_BENEFICIARY, _tokenAddress, _fee);
         emit WithdrawnERC20(msg.sender, _tokenAddress, _balance.sub(_fee));
-    }
-    
-    /**
-    *@dev Execute external contract via low level call, in case if Balacer reward distibution changes
-    *@param _address contract address 
-    *@param _data function and parameters data
-    *@param _value ether value to send
-    */
-    function execute(address _address, bytes memory _data, uint256 _value)
-        payable
-        external
-        onlyOwner
-        returns (bytes memory)
-    {
-        require(_address != address(rewardsToken) && _address != address(lpToken), "Cannot execute Reward or LP Tokens contracts");
-        return _address.functionCallWithValue(_data, _value);
     }
     
     /***************************************
