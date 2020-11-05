@@ -252,7 +252,6 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
      */
     function withdraw(uint256 _amount)
         public
-        onlyAfterSetup
         onlyAfterStart
         updatePeriod
     {
@@ -268,7 +267,6 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     function claimReward()
         public
         nonReentrant
-        onlyAfterSetup
         onlyAfterStart
         updatePeriod
     {
