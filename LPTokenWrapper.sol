@@ -30,11 +30,10 @@ contract LPTokenWrapper is ReentrancyGuard {
     uint256 public holdTime;
     
     struct UserData {
-        //Period first time deposited or last finished period rewards calculated
+        //Period when balance becomes nonzero or last period rewards claimed
         uint256 period;
         //Last time deposited. used to implement holdDays
         uint256 lastTime;
-        bool exists;
         mapping (uint256 => uint) historyBalance;
     }
 
@@ -98,12 +97,9 @@ contract LPTokenWrapper is ReentrancyGuard {
 
         _totalSupply = _totalSupply.add(_amount);
         _updateHistoryTotalSupply(_period);
-        _balances[msg.sender] = _balances[msg.sender].add(_amount);
         UserData storage user = userData[msg.sender]; 
-        if(!user.exists){
-            user.period = _period;
-            user.exists = true;
-        }
+        if(_balances[msg.sender] == 0) user.period = _period;
+        _balances[msg.sender] = _balances[msg.sender].add(_amount);
         user.historyBalance[_period] = _balances[msg.sender];
         user.lastTime = block.timestamp;
         lpToken.safeTransferFrom(msg.sender, address(this), _amount);
@@ -160,18 +156,6 @@ contract LPTokenWrapper is ReentrancyGuard {
     {
         userData[_address].period = _period;
         userData[_address].historyBalance[_period] = _balances[_address];
-    }
-
-    /**
-     * @dev Returns true if uders exists
-     * @param _address address of the User
-     */
-     function isUserExist(address _address)
-        internal
-        view
-        returns (bool)
-    {
-        return userData[_address].exists;
-    }    
+    }   
 
 }

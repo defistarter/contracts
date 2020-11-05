@@ -324,7 +324,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         returns (uint256)
     {
         UserData storage user = getUserData(_address);
-        if(!user.exists || block.timestamp >= closeTime) return 0;
+        if(block.timestamp >= closeTime) return 0;
         uint256 _period = currentPeriod();
         uint256 periodTotalSupply;
         uint256 savedTotalSupply;
@@ -380,7 +380,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         returns (uint256)
     {
         uint256 _totalSupply = totalSupply();
-        if(_totalSupply == 0 || !isUserExist(_address) || block.timestamp >= closeTime) return 0;
+        if(_totalSupply == 0 || block.timestamp >= closeTime) return 0;
         return rewardsPerPeriodCap.mul(
             balanceOf(_address)
         ).mul(
