@@ -25,7 +25,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     uint256 constant public CALC_PRECISION = 1e18;
 
     // Address where fees will be sent if fee isn't 0
-    address public fee_beneficiary;
+    address public feeBeneficiary;
     // Fee in PPM (Parts Per Million), can be 0
     uint256 public fee;
     //Status of contract
@@ -65,7 +65,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     }
     
     /** @dev Make sure setup is finished */
-    modifier onlyAferSetup() {
+    modifier onlyAfterSetup() {
         require(status != Status.Setup, "Setup is not finished");
         _;
     }
@@ -79,6 +79,8 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
      * @param _totalPeriods Total periods contract will be running
      * @param _gracePeriodDays Grace period in days 
      * @param _holdDays Time in days LP Tokens will be on hold for user after each stake
+     * @param _feeBeneficiary Address where fees will be sent
+     * @param _fee Fee in ppm
      */
     constructor(
         address _lpToken,
@@ -88,7 +90,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         uint256 _totalPeriods,
         uint256 _gracePeriodDays,
         uint256 _holdDays,
-        address _fee_beneficiary,
+        address _feeBeneficiary,
         uint256 _fee
     )
         public
@@ -102,7 +104,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         periodTime = _periodDays.mul(1 days);
         totalPeriods = _totalPeriods;
         gracePeriodTime = _gracePeriodDays.mul(1 days);
-        fee_beneficiary = _fee_beneficiary;
+        feeBeneficiary = _feeBeneficiary;
         fee = _fee;
     }
 
@@ -130,7 +132,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     function adminStartNow()
         external
         onlyOwner
-        onlyAferSetup
+        onlyAfterSetup
     {
         require(startTime == 0 && status == Status.Running, "Already started");
         _startNow();
@@ -143,7 +145,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     function adminEnd()
         external
         onlyOwner
-        onlyAferSetup
+        onlyAfterSetup
     {
         require(block.timestamp >= endTime && endTime != 0, "Cannot End");
         _updatePeriod();
@@ -156,7 +158,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
      function adminClose(address _address)
         external
         onlyOwner
-        onlyAferSetup
+        onlyAfterSetup
     {
         require(block.timestamp >= closeTime && closeTime != 0, "Cannot Close");
         uint256 _rewardsBalance = rewardsToken.balanceOf(address(this));
@@ -177,8 +179,8 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         require(_balance != 0, "Not enough balance");
         uint256 _fee = _balance.mul(fee).div(1e6);
         if(_fee != 0){
-            _token.safeTransfer(fee_beneficiary, _fee);
-            emit WithdrawnERC20(fee_beneficiary, _tokenAddress, _fee);
+            _token.safeTransfer(feeBeneficiary, _fee);
+            emit WithdrawnERC20(feeBeneficiary, _tokenAddress, _fee);
         }
         _token.safeTransfer(msg.sender, _balance.sub(_fee));
         emit WithdrawnERC20(msg.sender, _tokenAddress, _balance.sub(_fee));
@@ -228,7 +230,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
      */
     function stake(uint256 _amount)
         external
-        onlyAferSetup
+        onlyAfterSetup
         updatePeriod
     {
         require(_amount > 0, "Cannot stake 0");
@@ -244,7 +246,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
      */
     function withdraw(uint256 _amount)
         public
-        onlyAferSetup
+        onlyAfterSetup
         updatePeriod
     {
         require(_amount > 0, "Cannot withdraw 0");
@@ -259,7 +261,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     function claimReward()
         public
         nonReentrant
-        onlyAferSetup
+        onlyAfterSetup
         updatePeriod
     {
         require(block.timestamp <= closeTime, "Contract is Closed");
@@ -323,26 +325,41 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         uint256 periodBalance;
         uint256 savedBalance;
         uint256 rewardTotal;
-        savedTotalSupply =  historyTotalSupply(user.period);
-        savedBalance = user.historyBalance[user.period];
-        for(uint256 i = user.period; i < _period; i++){
-            periodTotalSupply = historyTotalSupply(i);
-            periodBalance = user.historyBalance[i];
-            if(i > user.period){
+        if(_period > user.period){
+            savedTotalSupply =  historyTotalSupply(user.period);
+            savedBalance = user.historyBalance[user.period];
+            if(savedTotalSupply != 0){
+                rewardTotal = rewardTotal.add(
+                    rewardsPerPeriodCap.mul(
+                        savedBalance
+                    ).mul(
+                        CALC_PRECISION
+                    ).div(
+                        savedTotalSupply
+                    ).div(
+                        CALC_PRECISION
+                    )
+                );
+            }
+            for(uint256 i = user.period+1; i < _period; i++){
+                periodTotalSupply = historyTotalSupply(i);
+                periodBalance = user.historyBalance[i];
                 periodBalance == 0 ? periodBalance = savedBalance : savedBalance = periodBalance;
                 periodTotalSupply == 0 ? periodTotalSupply = savedTotalSupply : savedTotalSupply = periodTotalSupply;
+                if(periodTotalSupply != 0){
+                    rewardTotal = rewardTotal.add(
+                        rewardsPerPeriodCap.mul(
+                            periodBalance
+                        ).mul(
+                            CALC_PRECISION
+                        ).div(
+                            periodTotalSupply
+                        ).div(
+                            CALC_PRECISION
+                        )
+                    );
+                }
             }
-            rewardTotal = rewardTotal.add(
-                rewardsPerPeriodCap.mul(
-                    periodBalance
-                ).mul(
-                    CALC_PRECISION
-                ).div(
-                    periodTotalSupply
-                ).div(
-                    CALC_PRECISION
-                )
-            );
         }
         return rewardTotal;
     }
