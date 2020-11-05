@@ -70,6 +70,12 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         _;
     }
 
+    /** @dev Make sure setup is finished */
+    modifier onlyAfterStart() {
+        require(startTime != 0, "Staking is not started");
+        _;
+    }
+
     /**
      * @dev Contract constructor
      * @param _lpToken Contract address of LP Token
@@ -247,6 +253,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
     function withdraw(uint256 _amount)
         public
         onlyAfterSetup
+        onlyAfterStart
         updatePeriod
     {
         require(_amount > 0, "Cannot withdraw 0");
@@ -262,6 +269,7 @@ contract StakingPool is Ownable, ReentrancyGuard, LPTokenWrapper {
         public
         nonReentrant
         onlyAfterSetup
+        onlyAfterStart
         updatePeriod
     {
         require(block.timestamp <= closeTime, "Contract is Closed");
